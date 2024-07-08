@@ -1,0 +1,113 @@
+import cv2
+import os
+import glob
+
+# Create the output directory if it doesn't exist
+output_dir = r'D:\Siddharth\Environments\Augmentation_FLIP_IMG_TXT\Anotated_output______'
+os.makedirs(output_dir, exist_ok=True)
+
+# Define the input directory
+input_directory = r'D:\Siddharth\Environments\Augmentation_FLIP_IMG_TXT\ANNONATED_DATA_p2'
+
+# Define the percentages for augmentation
+percent_LR = 0.1  # Percentage for left-right flip
+percent_UD = 0.2  # Percentage for up-down flip
+
+# List all files in the input directory
+l = len(os.listdir(input_directory))
+print(l)
+
+# Calculate the number of files to process
+x_LR = int(l * percent_LR)
+x_UD = int(l * percent_UD)
+
+# Data augmentation by left-right (LR) and up-down (UD) flips
+print(x_LR)
+
+# Initialize the dictionary to hold the image annotations
+annotation_dict = {}
+
+# Store annotations in dictionary
+for file_name in glob.glob(input_directory + "/*"):
+    if file_name.endswith('.txt'):
+        with open(file_name, 'r') as file:
+            contents = file.read().strip()
+            base_name = os.path.basename(file_name)
+            annotation_dict[base_name.split(".")[0] + '.jpg'] = contents
+
+def adjust_bounding_boxes(bboxes, img_shape, flip_type):
+    h, w = img_shape[:2]
+    new_bboxes = []
+    for bbox in bboxes:
+        class_label = bbox[0]
+        x_center, y_center, width, height = bbox[1:]
+
+        # Convert normalized coordinates to pixel values
+        x_center *= w
+        y_center *= h
+        width *= w
+        height *= h
+
+        if flip_type == 'horizontal':
+            x_center = w - x_center
+        elif flip_type == 'vertical':
+            y_center = h - y_center
+
+        # Convert pixel values back to normalized coordinates
+        x_center /= w
+        y_center /= h
+        width /= w
+        height /= h
+
+        new_bboxes.append([class_label, x_center, y_center, width, height])
+    return new_bboxes
+
+# Augment images and adjust annotations
+for i, file_path in enumerate(glob.glob(input_directory + "/*")):
+    if i < x_LR and file_path.endswith('.jpg'):
+        print("Processing LR flip for:", file_path)
+        img = cv2.imread(file_path)
+        img_h = cv2.flip(img, 1)
+        base_name = os.path.basename(file_path)
+        name, ext = os.path.splitext(base_name)
+        cv2.imwrite(os.path.join(output_dir, f"{name}_flip_h{ext}"), img_h)
+
+        # Adjust bounding boxes
+        if base_name in annotation_dict:
+            annotations = annotation_dict[base_name].split('\n')
+            bboxes = []
+            for annotation in annotations:
+                parts = annotation.split()
+                class_label = parts[0]
+                coordinates = list(map(float, parts[1:]))
+                bboxes.append([class_label] + coordinates)
+            new_bboxes = adjust_bounding_boxes(bboxes, img.shape, 'horizontal')
+            # Save the new annotations
+            with open(os.path.join(output_dir, f"{name}_flip_h.txt"), 'w') as f:
+                for bbox in new_bboxes:
+                    f.write(' '.join(map(str, bbox)) + '\n')
+
+for i, file_path in enumerate(glob.glob(input_directory + "/*")):
+    if i < x_UD and file_path.endswith(".jpg"):
+        print("Processing UD flip for:", file_path)
+        img = cv2.imread(file_path)
+        img_v = cv2.flip(img, 0)
+        base_name = os.path.basename(file_path)
+        name, ext = os.path.splitext(base_name)
+        cv2.imwrite(os.path.join(output_dir, f"{name}_flip_v{ext}"), img_v)
+
+        # Adjust bounding boxes
+        if base_name in annotation_dict:
+            annotations = annotation_dict[base_name].split('\n')
+            bboxes = []
+            for annotation in annotations:
+                parts = annotation.split()
+                class_label = parts[0]
+                coordinates = list(map(float, parts[1:]))
+                bboxes.append([class_label] + coordinates)
+            new_bboxes = adjust_bounding_boxes(bboxes, img.shape, 'vertical')
+            # Save the new annotations
+            with open(os.path.join(output_dir, f"{name}_flip_v.txt"), 'w') as f:
+                for bbox in new_bboxes:
+                    f.write(' '.join(map(str, bbox)) + '\n')
+
